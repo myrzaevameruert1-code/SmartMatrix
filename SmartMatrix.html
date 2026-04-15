@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="UTF-8">
+<title>Matrix AI Lab – 9 сынып</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+body{
+  font-family:Arial;
+  background: linear-gradient(135deg,#667eea,#764ba2);
+  color:white;
+  padding:20px;
+  margin:0;
+}
+.container{
+  background:white;
+  color:black;
+  padding:25px;
+  border-radius:20px;
+  width:85%;
+  margin:auto;
+  box-shadow:0 10px 30px rgba(0,0,0,0.4);
+}
+h1{text-align:center;color:#5e35b1;}
+textarea{
+  width:100%;
+  height:220px;
+  font-family:monospace;
+  border-radius:10px;
+  padding:10px;
+}
+button{
+  padding:10px 18px;
+  margin:5px;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:bold;
+}
+.run{background:#43a047;color:white;}
+.next{background:#1e88e5;color:white;}
+.reset{background:#e53935;color:white;}
+.result{background:#fb8c00;color:white;}
+.cert{background:#8e24aa;color:white;}
+.descriptor{background:#e3f2fd;padding:10px;border-radius:10px;margin:10px 0;}
+.aiBox{background:#f3e5f5;padding:10px;border-radius:10px;margin-top:10px;}
+.correct{color:green;font-weight:bold;}
+.error{color:red;font-weight:bold;}
+.scoreBox{font-size:18px;margin:10px 0;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🧠 Matrix AI Lab – Екі өлшемді массив</h1>
+
+<div id="task"></div>
+<div id="descriptor" class="descriptor"></div>
+
+<textarea id="code"></textarea><br>
+
+<button class="run" onclick="runCode()">▶ Run</button>
+<button class="result" onclick="showAnswer()">📊 Нәтиже</button>
+<button class="next" onclick="nextTask()">➡ Келесі</button>
+<button class="reset" onclick="resetAll()">🔄 Бастау</button>
+
+
+<div id="scoreBox" class="scoreBox"></div>
+<div id="output"></div>
+<div id="aiHelp" class="aiBox"></div>
+</div>
+
+<script>
+let pyodide;
+let currentTask = 0;
+let totalScore = 0;
+let taskScores = [0,0,0];
+let lastSolution = "";
+
+const tasks = [
+{
+text:`1-есеп:
+Матрицаның барлық элементтерінің қосындысын табыңыз.
+
+matrix = [
+[1,2,3],
+[4,5,6],
+[7,8,9]
+]`,
+descriptor:[
+"Екі өлшемді массив қолдану",
+"Цикл арқылы өту",
+"Қосынды есептеу",
+"print арқылы шығару"
+],
+answer:"45",
+solution:`matrix = [
+[1,2,3],
+[4,5,6],
+[7,8,9]
+]
+
+total = 0
+for row in matrix:
+    for num in row:
+        total += num  # әр num-ды қосындыға қосу
+
+print(total)  # нәтижені шығару`
+},
+{
+text:`2-есеп:
+Матрицаның ең үлкен элементін табыңыз.
+
+matrix = [
+[3,8,1],
+[9,2,7],
+[4,6,5]
+]`,
+descriptor:[
+"max мәнді анықтау",
+"Цикл арқылы өту",
+"Салыстыру операторы",
+"print қолдану"
+],
+answer:"9",
+solution:`matrix = [
+[3,8,1],
+[9,2,7],
+[4,6,5]
+]
+
+max_val = matrix[0][0]  # бастапқы max
+
+for row in matrix:
+    for num in row:
+        if num > max_val:  # егер жаңа num үлкен болса
+            max_val = num  # max-ты жаңарту
+
+print(max_val)  # нәтижені шығару`
+},
+{
+text:`3-есеп:
+Басты диагональ элементтерінің қосындысын табыңыз.
+
+matrix = [
+[1,2,3],
+[4,5,6],
+[7,8,9]
+]`,
+descriptor:[
+"range қолдану",
+"Индекспен жұмыс",
+"Диагональ элементтерін қосу",
+"print шығару"
+],
+answer:"15",
+solution:`matrix = [
+[1,2,3],
+[4,5,6],
+[7,8,9]
+]
+
+total = 0
+for i in range(len(matrix)):  # индекс арқылы диагональ
+    total += matrix[i][i]  # диагональ элементтерін қосу
+
+print(total)  # нәтижені шығару`
+}
+];
+
+async function init(){
+pyodide = await loadPyodide();
+loadTask();
+}
+init();
+
+function loadTask(){
+document.getElementById("task").innerText = tasks[currentTask].text;
+
+let desc="<b>Дескриптор:</b><ul>";
+tasks[currentTask].descriptor.forEach(d=>{
+desc+="<li>"+d+"</li>";
+});
+desc+="</ul>";
+document.getElementById("descriptor").innerHTML=desc;
+
+document.getElementById("code").value="";
+document.getElementById("output").innerHTML="";
+document.getElementById("aiHelp").innerHTML="";
+updateScore();
+}
+
+async function runCode(){
+let userCode = document.getElementById("code").value;
+
+try{
+pyodide.runPython(`import sys; from io import StringIO; sys.stdout=StringIO()`);
+await pyodide.runPythonAsync(userCode);
+let result = pyodide.runPython("sys.stdout.getvalue()").trim();
+if(!result) result="(Нәтиже шығарылмады. print қолдану керек)";
+document.getElementById("output").innerHTML="<b>Нәтиже:</b> "+result;
+
+if(result === tasks[currentTask].answer){
+let score = evaluateScore(userCode);
+taskScores[currentTask]=score;
+totalScore = taskScores.reduce((a,b)=>a+b,0);
+document.getElementById("aiHelp").innerHTML=
+"<span class='correct'>✅ Дұрыс! Ұпай: "+score+"</span>";
+updateScore();
+}else{
+showAI("Нәтиже дұрыс емес.");
+}
+
+}catch(error){
+showAI(error);
+}
+}
+
+function evaluateScore(code){
+let score=0;
+if(code.includes("for")) score+=3;
+if(code.includes("print")) score+=2;
+if(code.includes("matrix")) score+=2;
+if(code.includes("+=")||code.includes(">")) score+=3;
+if(score>10) score=10;
+return score;
+}
+
+function showAI(msg){
+lastSolution = tasks[currentTask].solution;
+document.getElementById("aiHelp").innerHTML=
+"<span class='error'>❌ "+msg+"</span><br><br>"+
+"<b>🤖 AI дұрыс код (әр жолға түсіндірме қосылды):</b><pre>"+lastSolution+"</pre>"+
+"<button onclick='insertSolution()'>Кодты енгізу</button>";
+}
+
+function insertSolution(){
+document.getElementById("code").value = lastSolution;
+}
+
+function showAnswer(){
+alert("Дұрыс нәтиже: "+tasks[currentTask].answer);
+}
+
+function nextTask(){
+if(currentTask<tasks.length-1){
+currentTask++;
+loadTask();
+}else{
+alert("Барлық есеп аяқталды! Жалпы ұпай: "+totalScore);
+}
+}
+
+function updateScore(){
+document.getElementById("scoreBox").innerHTML=
+"Әр есеп ұпайы: "+taskScores.join(" | ")+"<br>Жалпы ұпай: "+totalScore;
+}
+
+function resetAll(){
+currentTask=0;
+totalScore=0;
+taskScores=[0,0,0];
+loadTask();
+}
+
+function generateCertificate(){
+const { jsPDF } = window.jspdf;
+let doc = new jsPDF();
+doc.setFontSize(18);
+doc.text("Matrix AI Lab Сертификаты",20,30);
+doc.setFontSize(14);
+doc.text("Жалпы ұпай: "+totalScore,20,50);
+doc.save("certificate.pdf");
+}
+
+/* 🌐 Онлайн AI API қосу үшін:
+async function callAI(code){
+   const response = await fetch("YOUR_BACKEND_URL",{
+       method:"POST",
+       headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({code:code})
+   });
+   const data = await response.json();
+}
+*/
+
+</script>
+</body>
+</html>
